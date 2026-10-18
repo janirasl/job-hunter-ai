@@ -1,0 +1,59 @@
+name: Job Hunter AI
+
+on:
+  schedule:
+    # Lunes a viernes a las 6:52 UTC = 8:52 en Madrid en verano (7:52 en invierno).
+    - cron: "52 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulación (no escribe en Notion)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # para guardar data/capturas.csv en el repositorio
+
+concurrency:
+  group: job-hunter
+  cancel-in-progress: false
+
+jobs:
+  captar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Comprobar reglas
+        run: python -m pytest -q
+
+      - name: Captar ofertas
+        env:
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          INFOJOBS_CLIENT_ID: ${{ secrets.INFOJOBS_CLIENT_ID }}
+          INFOJOBS_CLIENT_SECRET: ${{ secrets.INFOJOBS_CLIENT_SECRET }}
+          EXCLUSIONES_CSV: ${{ secrets.EXCLUSIONES_CSV }}
+        run: python -m job_hunter.main
+
+      - name: Guardar registro de capturas
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "job-hunter-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/capturas.csv
+          git diff --cached --quiet || git commit -m "Capturas $(date +%F)"
+          git push

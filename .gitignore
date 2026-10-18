@@ -1,0 +1,4 @@
+.env
+exclusiones.csv
+__pycache__/
+.pytest_cache/
