@@ -23,7 +23,7 @@ BUSQUEDAS_ADZUNA = [
     ("analista de datos", "Alicante"),
     ("data analyst", "Alicante"),
     ("business intelligence", "Alicante"),
-    ("data analyst", "Madrid"),  # solo pasarán las remotas o híbridas
+    ("data analyst teletrabajo", "España"),  # remoto en España; Madrid lo cubre JSearch con descripción completa
 ]
 
 # JSearch (plan gratuito: 200 peticiones/mes). 4 búsquedas x 22 días laborables = ~88.

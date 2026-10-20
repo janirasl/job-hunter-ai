@@ -21,6 +21,8 @@ ANALISTA = re.compile(r"\b(analyst|analista|trainee|becario|becaria|beca|intern|
 HERRAMIENTAS = re.compile(r"\b(sql|power bi|powerbi|tableau|python|looker|dashboards?)\b")
 TECNICO = re.compile(r"\b(engineer|ingeniero|ingeniera|scientist|developer|desarrollador|desarrolladora|architect|arquitecto|programmer|programador)\b")
 EXPERIENCIA_ALTA = re.compile(r"\b([3-9]|1[0-9])\s*\+?\s*(anos|years)\b")
+# "Data Analyst II", "Data Scientist III": la numeración indica nivel intermedio o superior
+NIVEL_NUMERADO = re.compile(r"\b(analyst|analista|scientist|engineer|ingeniero|ingeniera|specialist|especialista)\s+(ii|iii|iv|v|2|3|4)\b")
 OBJETIVO = re.compile(
     r"\b(data analyst|analista de datos|bi analyst|business intelligence|reporting analyst|"
     r"insights analyst|data reporting|hr analytics|analista de rrhh)\b|\bpeople\b.*\banalytics\b"
@@ -92,7 +94,7 @@ def modalidad_desde_texto(texto) -> str:
     x = limpiar(texto)
     if re.search(r"\b(hibrido|hibrida|hybrid)\b", x):
         return "Híbrido"
-    if re.search(r"\b(remoto|remota|teletrabajo|remote)\b", x):
+    if re.search(r"\b(remoto|remota|teletrabajo|remote|home ?based|work from home|wfh|desde casa)\b", x):
         return "Remoto"
     if re.search(r"\bpresencial\b", x):
         return "Presencial"
@@ -109,20 +111,23 @@ def clasificar(o: dict) -> tuple[str, str]:
         return "descartar", "título sénior"
     if NIVEL_ALTO_FUENTE.search(sen):
         return "descartar", f"nivel de la fuente: {sen}"
+    if NIVEL_NUMERADO.search(t):
+        return "descartar", "nivel numerado en el título (II, III…)"
     nucleo = bool(NUCLEO.search(t))
     if not nucleo and not (ANALISTA.search(t) and HERRAMIENTAS.search(d)):
         return "descartar", "puesto sin relación con datos"
+    es_analista = bool(re.search(r"\b(analyst|analista)\b", t))
+    if TECNICO.search(t) and not es_analista:
+        return "descartar", "perfil técnico (ingeniería, ciencia de datos o desarrollo)"
+    if EXPERIENCIA_ALTA.search(d):
+        return "descartar", "pide 3 o más años de experiencia"
     motivos = []
     if not nucleo:
         motivos.append("título poco claro")
-    if TECNICO.search(t) and not re.search(r"\b(analyst|analista)\b", t):
-        motivos.append("perfil más técnico")
     if re.search(r"\b(programmer|programador|developer|desarrollador)\b", t):
         motivos.append("perfil de desarrollo")
     if re.search(r"\bmanager\b", t):
         motivos.append("puesto de manager")
-    if EXPERIENCIA_ALTA.search(d):
-        motivos.append("pide 3 o más años")
     if re.search(r"\bsenior\b", d):
         motivos.append("la descripción menciona senior")
     return ("revisar", ", ".join(motivos)) if motivos else ("pendiente", "")
@@ -138,9 +143,8 @@ def aplicar_zona(o: dict, estado: str, motivo: str) -> tuple[str, str]:
     if ZONA_MADRID.search(u):
         if o.get("modalidad") == "Híbrido":
             return estado, motivo
-        if o.get("modalidad") == "No especificada":
-            return "revisar", ", ".join(filter(None, [motivo, "Madrid: modalidad sin confirmar"]))
-        return "descartar", "Madrid presencial"
+        # Solo vale remoto o híbrido: si la oferta no lo dice, no se puede confirmar
+        return "descartar", "Madrid sin remoto ni híbrido confirmado"
     return "descartar", "fuera de zona y no remota"
 
 

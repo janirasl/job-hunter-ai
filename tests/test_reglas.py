@@ -38,15 +38,29 @@ def test_analista_sin_datos_en_titulo_pasa_si_pide_herramientas():
     assert o["estado"] == "revisar" and "título poco claro" in o["motivo"]
 
 
-def test_experiencia_alta_va_a_revisar():
-    assert uno(descripcion="Se requieren 3 años de experiencia")["estado"] == "revisar"
+def test_experiencia_alta_se_descarta():
+    assert uno(descripcion="Se requieren 3 años de experiencia")["estado"] == "descartar"
+    assert uno(descripcion="5+ years of experience")["estado"] == "descartar"
+    assert uno(descripcion="De 0 a 2 años de experiencia")["estado"] == "pendiente"
+
+
+def test_nivel_numerado_se_descarta():
+    assert uno(puesto="Data Analyst III (Remote)", modalidad="Remoto")["estado"] == "descartar"
+    assert uno(puesto="Data Analyst II - Regulatory Reporting")["estado"] == "descartar"
+    assert uno(puesto="Data Analyst Intern")["estado"] == "pendiente"
+
+
+def test_perfil_tecnico_sin_analista_se_descarta():
+    assert uno(puesto="Data Scientist - Analytics")["estado"] == "descartar"
+    assert uno(puesto="Ingeniero de Datos")["estado"] == "descartar"
+    assert uno(puesto="BI Developer / Data Analyst")["estado"] == "revisar"
 
 
 def test_zonas():
     assert uno(ubicacion="San Vicente del Raspeig", modalidad="Presencial")["estado"] == "pendiente"
     assert uno(ubicacion="Madrid", modalidad="Presencial")["estado"] == "descartar"
     assert uno(ubicacion="Madrid", modalidad="Híbrido")["estado"] == "pendiente"
-    assert uno(ubicacion="Madrid", modalidad="No especificada")["estado"] == "revisar"
+    assert uno(ubicacion="Madrid", modalidad="No especificada")["estado"] == "descartar"
     assert uno(ubicacion="Valencia", modalidad="Presencial")["estado"] == "descartar"
     assert uno(ubicacion="Sevilla", modalidad="Remoto")["estado"] == "pendiente"
 
@@ -58,7 +72,7 @@ def test_ofertas_antiguas_se_descartan():
 
 def test_puntuacion_premia_encaje():
     buena = uno(puesto="Analista de Datos Junior", descripcion="SQL, Power BI y Python")
-    floja = uno(puesto="Data Engineer", descripcion="Spark")
+    floja = uno(puesto="Data Analyst", descripcion="Spark")
     assert buena["puntuacion"] == 85
     assert buena["puntuacion"] > floja["puntuacion"]
     assert uno(puesto="People Rewards Analytics Specialist")["puntuacion"] >= 30
@@ -67,6 +81,7 @@ def test_puntuacion_premia_encaje():
 def test_modalidad_y_fechas():
     assert modalidad_desde_texto("Modalidad híbrida, 2 días") == "Híbrido"
     assert modalidad_desde_texto("Oficina en el centro") == "No especificada"
+    assert modalidad_desde_texto("Data Analyst - Madrid Homebased") == "Remoto"
     assert fecha_relativa("hace 6 días", HOY) == "2026-10-12"
     assert fecha_relativa("hace un día", HOY) == "2026-10-17"
     assert a_fecha(1792154947) == "2026-10-16"       # segundos
