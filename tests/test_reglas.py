@@ -7,7 +7,8 @@ HOY = date(2026, 10, 18)
 
 def oferta(**kw):
     base = {"canal": "test", "empresa": "Acme", "puesto": "Data Analyst", "descripcion": "",
-            "ubicacion": "Alicante", "url": "https://x.com/1", "fecha": "2026-10-15", "modalidad": "Presencial"}
+            "ubicacion": "Alicante", "url": "https://x.com/1", "fecha": "2026-10-15", "modalidad": "Presencial",
+            "seniority_fuente": "Entry-level"}
     return {**base, **kw}
 
 
@@ -51,8 +52,8 @@ def test_nivel_numerado_se_descarta():
 
 
 def test_perfil_tecnico_sin_analista_se_descarta():
-    assert uno(puesto="Data Scientist - Analytics")["estado"] == "descartar"
-    assert uno(puesto="Ingeniero de Datos")["estado"] == "descartar"
+    assert uno(puesto="Data Scientist - Analytics", seniority_fuente="")["estado"] == "descartar"
+    assert uno(puesto="Ingeniero de Datos", seniority_fuente="")["estado"] == "descartar"
     assert uno(puesto="BI Developer / Data Analyst")["estado"] == "revisar"
 
 
@@ -60,7 +61,7 @@ def test_zonas():
     assert uno(ubicacion="San Vicente del Raspeig", modalidad="Presencial")["estado"] == "pendiente"
     assert uno(ubicacion="Madrid", modalidad="Presencial")["estado"] == "descartar"
     assert uno(ubicacion="Madrid", modalidad="Híbrido")["estado"] == "pendiente"
-    assert uno(ubicacion="Madrid", modalidad="No especificada")["estado"] == "descartar"
+    assert uno(ubicacion="Madrid", modalidad="No especificada", seniority_fuente="")["estado"] == "descartar"
     assert uno(ubicacion="Valencia", modalidad="Presencial")["estado"] == "descartar"
     assert uno(ubicacion="Sevilla", modalidad="Remoto")["estado"] == "pendiente"
 
@@ -112,3 +113,29 @@ def test_deduplicar_por_url_clave_exclusiones_y_misma_ejecucion():
 def test_deduplicar_con_notion_vacio():
     nuevas, repetidas = deduplicar(procesar([oferta()], HOY), [], [])
     assert len(nuevas) == 1 and not repetidas
+
+
+def test_sin_senal_de_entrada_va_a_revisar():
+    o = uno(puesto="Data Analyst", seniority_fuente="")
+    assert o["estado"] == "revisar" and "no indica nivel de entrada" in o["motivo"]
+    assert uno(puesto="Data Analyst", seniority_fuente="", descripcion="Buscamos recién titulado")["estado"] == "pendiente"
+    assert uno(puesto="Data Analyst", seniority_fuente="", descripcion="de 0 a 2 años de experiencia")["estado"] == "pendiente"
+
+
+def test_cargos_con_experiencia_se_descartan():
+    assert uno(puesto="Clinical Business Intelligence Manager", seniority_fuente="")["estado"] == "descartar"
+    assert uno(puesto="Aviation Advanced Analytics Consultant", seniority_fuente="")["estado"] == "descartar"
+    assert uno(puesto="HR Controlling & Analytics Coordinator", seniority_fuente="")["estado"] == "descartar"
+    assert uno(puesto="Junior Data Consultant")["estado"] != "descartar"
+
+
+def test_perfil_tecnico_de_entrada_va_a_revisar():
+    assert uno(puesto="Analytics Engineering Intern")["estado"] == "revisar"
+    assert uno(puesto="Data Scientist", seniority_fuente="")["estado"] == "descartar"
+
+
+def test_madrid_de_entrada_sin_modalidad_va_a_revisar():
+    o = uno(puesto="Business Intelligence Intern Spain", ubicacion="Madrid", modalidad="No especificada")
+    assert o["estado"] == "revisar" and "Madrid" in o["motivo"]
+    assert uno(puesto="Data Analyst", ubicacion="Madrid", modalidad="No especificada",
+               seniority_fuente="")["estado"] == "descartar"

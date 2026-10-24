@@ -19,7 +19,7 @@ NIVEL_ALTO_FUENTE = re.compile(r"senior|lead|manager|director|executive|mid", re
 NUCLEO = re.compile(r"\b(data|datos|bi|business intelligence|analytics|analitica|reporting|insights?|power bi|tableau|dashboards?)\b")
 ANALISTA = re.compile(r"\b(analyst|analista|trainee|becario|becaria|beca|intern|internship|practicas)\b")
 HERRAMIENTAS = re.compile(r"\b(sql|power bi|powerbi|tableau|python|looker|dashboards?)\b")
-TECNICO = re.compile(r"\b(engineer|ingeniero|ingeniera|scientist|developer|desarrollador|desarrolladora|architect|arquitecto|programmer|programador)\b")
+TECNICO = re.compile(r"\b(engineer|engineering|ingenieria|ingeniero|ingeniera|scientist|developer|desarrollador|desarrolladora|architect|arquitecto|programmer|programador)\b")
 EXPERIENCIA_ALTA = re.compile(r"\b([3-9]|1[0-9])\s*\+?\s*(anos|years)\b")
 # "Data Analyst II", "Data Scientist III": la numeración indica nivel intermedio o superior
 NIVEL_NUMERADO = re.compile(r"\b(analyst|analista|scientist|engineer|ingeniero|ingeniera|specialist|especialista)\s+(ii|iii|iv|v|2|3|4)\b")
@@ -28,6 +28,14 @@ OBJETIVO = re.compile(
     r"insights analyst|data reporting|hr analytics|analista de rrhh)\b|\bpeople\b.*\banalytics\b"
 )
 ENTRADA = re.compile(r"\b(junior|jr|trainee|becario|becaria|beca|intern|internship|practicas|entry|graduate)\b")
+# Señales de que la oferta acepta poca experiencia (título, descripción o nivel de la fuente)
+SEÑAL_ENTRADA = re.compile(
+    r"\b(junior|jr|trainee|becari[oa]|beca|intern|internship|practicas|entry|graduate|graduad[oa]|"
+    r"recien titulad[oa]|sin experiencia|no experience|primer empleo|first job|"
+    r"(0|1) ?(-|a|o) ?2 (anos|years)|(1|un|one) (ano|year) de experiencia|hasta 2 anos|up to 2 years)\b")
+# Puestos que implican experiencia aunque no lo digan en años
+CARGO_ALTO = re.compile(r"\b(manager|coordinador|coordinadora|coordinator|advanced|avanzado|expert|experto|experta|"
+                        r"experienced|consultant|consultor|consultora)\b")
 HABILIDADES = [
     (re.compile(r"\bsql\b"), 10), (re.compile(r"\bpower ?bi\b"), 10), (re.compile(r"\bpython\b"), 10),
     (re.compile(r"\btableau\b"), 5), (re.compile(r"\bexcel\b"), 5), (re.compile(r"\b(pandas|numpy)\b"), 5),
@@ -116,20 +124,26 @@ def clasificar(o: dict) -> tuple[str, str]:
     nucleo = bool(NUCLEO.search(t))
     if not nucleo and not (ANALISTA.search(t) and HERRAMIENTAS.search(d)):
         return "descartar", "puesto sin relación con datos"
+    entrada = bool(SEÑAL_ENTRADA.search(f"{t} {d} {limpiar(sen)}"))
     es_analista = bool(re.search(r"\b(analyst|analista)\b", t))
-    if TECNICO.search(t) and not es_analista:
+    if CARGO_ALTO.search(t) and not entrada:
+        return "descartar", "cargo que implica experiencia (manager, consultor, coordinador…)"
+    if TECNICO.search(t) and not es_analista and not entrada:
         return "descartar", "perfil técnico (ingeniería, ciencia de datos o desarrollo)"
     if EXPERIENCIA_ALTA.search(d):
         return "descartar", "pide 3 o más años de experiencia"
     motivos = []
     if not nucleo:
         motivos.append("título poco claro")
+    if TECNICO.search(t) and not es_analista:
+        motivos.append("perfil técnico de entrada")
     if re.search(r"\b(programmer|programador|developer|desarrollador)\b", t):
         motivos.append("perfil de desarrollo")
-    if re.search(r"\bmanager\b", t):
-        motivos.append("puesto de manager")
     if re.search(r"\bsenior\b", d):
         motivos.append("la descripción menciona senior")
+    if not entrada:
+        # Sin señal de nivel de entrada no se descarta, pero tampoco se da por buena
+        motivos.append("no indica nivel de entrada")
     return ("revisar", ", ".join(motivos)) if motivos else ("pendiente", "")
 
 
@@ -143,7 +157,11 @@ def aplicar_zona(o: dict, estado: str, motivo: str) -> tuple[str, str]:
     if ZONA_MADRID.search(u):
         if o.get("modalidad") == "Híbrido":
             return estado, motivo
-        # Solo vale remoto o híbrido: si la oferta no lo dice, no se puede confirmar
+        # Solo vale remoto o híbrido. Si no lo dice, se descarta... salvo que sea de entrada
+        # (prácticas, junior): esas merecen comprobar la modalidad a mano.
+        texto = f"{norm_puesto(o.get('puesto'))} {limpiar(o.get('descripcion'))} {limpiar(o.get('seniority_fuente'))}"
+        if o.get("modalidad") == "No especificada" and SEÑAL_ENTRADA.search(texto):
+            return "revisar", ", ".join(filter(None, [motivo, "Madrid: confirmar si es remoto o híbrido"]))
         return "descartar", "Madrid sin remoto ni híbrido confirmado"
     return "descartar", "fuera de zona y no remota"
 
