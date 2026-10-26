@@ -49,6 +49,19 @@ def cargar_exclusiones() -> list[tuple[str, str]]:
     return [(f["Empresa"], f["Puesto"]) for f in filas if f.get("Empresa") and f.get("Puesto")]
 
 
+def cargar_historico() -> list[dict]:
+    """Ofertas que el sistema ya guardó alguna vez en Notion.
+
+    Sirve de memoria: si borras una oferta en Notion porque no te interesa,
+    no vuelve a entrar en la siguiente ejecución.
+    """
+    if not REGISTRO.exists():
+        return []
+    with REGISTRO.open(encoding="utf-8") as f:
+        return [{"empresa": r["empresa"], "puesto": r["puesto"], "url": r["url_oferta"]}
+                for r in csv.DictReader(f) if r.get("resultado") == "nueva"]
+
+
 def guardar_registro(filas: list[dict]) -> None:
     """Histórico de TODO lo captado (también lo descartado): fuente para el dashboard."""
     REGISTRO.parent.mkdir(exist_ok=True)
@@ -105,8 +118,10 @@ def main() -> int:
     if notion is None and not dry_run:
         log.error("Falta NOTION_TOKEN: no se puede deduplicar ni guardar. Usa --dry-run para probar sin Notion.")
         return 1
-    existentes = notion.leer_candidaturas() if notion else []
-    log.info("Candidaturas ya en Notion: %d", len(existentes))
+    en_notion = notion.leer_candidaturas() if notion else []
+    historico = cargar_historico()
+    log.info("Candidaturas en Notion: %d · ya guardadas alguna vez: %d", len(en_notion), len(historico))
+    existentes = en_notion + historico
     nuevas, repetidas = deduplicar(validas, existentes, cargar_exclusiones())
 
     # 4. Guardar
